@@ -8,7 +8,7 @@ import org.thp.scalligraph.query.PropertyUpdater
 import org.thp.scalligraph.traversal.{Graph, Traversal}
 import org.thp.scalligraph.{BadRequestError, EntityName}
 import org.thp.thehive.models._
-import play.api.libs.json.Json
+import play.api.libs.json.{JsString, JsTrue, Json}
 import play.api.test.PlaySpecification
 
 import java.util.Date
@@ -165,7 +165,9 @@ class CaseSrvTest extends PlaySpecification with TestAppBuilder with TheHiveOpsN
 
       database.transaction { implicit graph =>
         caseSrv.getOrFail(EntityName("3")) must beSuccessfulTry.which { `case`: Case with Entity =>
-          caseSrv.setOrCreateCustomField(`case`, EntityName("boolean1"), Some("plop"), None) must beFailedTry
+          customFieldSrv.getOrFail(EntityName("boolean1")).flatMap { cf =>
+            caseSrv.updateOrCreateCustomField(`case`, cf, JsString("plop"), None)
+          } must beFailedTry
         }
       }
     }
@@ -176,8 +178,10 @@ class CaseSrvTest extends PlaySpecification with TestAppBuilder with TheHiveOpsN
 
       database.transaction { implicit graph =>
         caseSrv.getOrFail(EntityName("3")) must beSuccessfulTry.which { `case`: Case with Entity =>
-          caseSrv.setOrCreateCustomField(`case`, EntityName("boolean1"), Some(true), None) must beSuccessfulTry
-          caseSrv.getCustomField(`case`, EntityName("boolean1")).flatMap(_.value)          must beSome.which(_ == true)
+          customFieldSrv.getOrFail(EntityName("boolean1")).flatMap { cf =>
+            caseSrv.updateOrCreateCustomField(`case`, cf, JsTrue, None)                                                   must beSuccessfulTry
+            caseSrv.get(`case`).customFields.has(_.customFieldName, "boolean1").richCustomField.headOption.map(_.jsValue) must beSome(JsTrue)
+          }
         }
       }
     }
@@ -502,7 +506,7 @@ class CaseSrvTest extends PlaySpecification with TestAppBuilder with TheHiveOpsN
       import app._
       import app.thehiveModule._
 
-      TheHiveOps(organisationSrv, customFieldSrv) { ops =>
+      TheHiveOps(organisationSrv, customFieldSrv, customFieldValueSrv) { ops =>
         import ops.CaseOpsDefs
         database.roTransaction { implicit graph =>
           caseSrv
